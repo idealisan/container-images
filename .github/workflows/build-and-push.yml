@@ -60,7 +60,15 @@ jobs:
           sudo apt-get install -y --no-install-recommends \
             debootstrap rsync gnupg squashfs-tools qemu-user-static \
             pkg-config libgpgme-dev libassuan-dev libbtrfs-dev libdevmapper-dev
-          go install github.com/lxc/distrobuilder/v3/distrobuilder@latest
+          # Build distrobuilder from a clone instead of `go install`, so we
+          # can bump a broken transitive dependency: distrobuilder v3 pulls in
+          # go.podman.io/storage, whose code calls securejoin.OpenInRoot /
+          # Reopen, but the version MVS resolves (filepath-securejoin v0.6.1)
+          # predates those functions. Force the latest securejoin to compile.
+          git clone --depth 1 https://github.com/lxc/distrobuilder "$HOME/distrobuilder-src"
+          cd "$HOME/distrobuilder-src"
+          go get github.com/cyphar/filepath-securejoin@latest
+          go build -o "$(go env GOPATH)/bin/distrobuilder" ./distrobuilder
           echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
 
       - name: Build rootfs (${{ matrix.arch }})
