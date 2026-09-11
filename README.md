@@ -10,8 +10,9 @@ binaries, the registry *is* the distribution channel.
 ## How it works
 
 - Each image lives in its own directory (e.g. [`ubuntu-24-xrdp/`](ubuntu-24-xrdp)).
-- A [GitHub Actions workflow](.github/workflows/build-and-push.yml) runs on every
-  **published release / pre-release** and:
+- A single [GitHub Actions workflow](.github/workflows/build-and-push.yml) runs on
+  every **published release / pre-release** and **auto-discovers** all image
+  directories (any dir containing an `image.yaml`), then for each one:
   1. builds the LXC/Incus rootfs with [`distrobuilder`](https://github.com/lxc/distrobuilder),
   2. wraps it into an OCI image, building `amd64` and `arm64` separately
      (arm64 is cross-built under `qemu-user-static`),
@@ -38,11 +39,11 @@ Each image directory contains:
 
 ## Adding a new image
 
-1. Create a directory `my-image/` with the files above.
-2. Copy [`.github/workflows/build-and-push.yml`](.github/workflows/build-and-push.yml)
-   to `.github/workflows/my-image.yml` and change `IMAGE_NAME` at the top.
-3. Push, cut a release, and the workflow publishes
-   `ghcr.io/<owner>/lxc-images/my-image` for both architectures.
+1. Create a directory `my-image/` containing an `image.yaml` and the other files
+   listed in [Image layout](#image-layout).
+2. That's it — the workflow **auto-discovers** the new directory on the next
+   release and publishes `ghcr.io/<owner>/lxc-images/my-image` for both
+   architectures. No workflow changes needed.
 
 ## Consuming an image
 
