@@ -1,0 +1,110 @@
+# Ubuntu 24.04 (Noble Numbat) image with XRDP + XFCE desktop, for LXC/Incus.
+#
+# Build with distrobuilder (https://github.com/lxc/distrobuilder):
+#   distrobuilder build-incus image.yaml        # -> meta.tar.xz + rootfs.tar.xz
+#   distrobuilder build-lxd   image.yaml        # -> for LXD
+#   incus image import meta.tar.xz rootfs.tar.xz --alias ubuntu-24-xrdp
+#
+# Launch (Incus):
+#   incus launch ubuntu-24-xrdp desktop
+#   incus config device add desktop rdp proxy listen=tcp:0.0.0.0:3389 connect=tcp:127.0.0.1:3389
+# Then RDP to the host IP on port 3389 (default user: ubuntu / ubuntu).
+
+image:
+  name: ubuntu-24.04-xrdp
+  distribution: ubuntu
+  release: "24.04"
+  variant: xrdp
+  description: Ubuntu 24.04 LTS (Noble) with XRDP + XFCE desktop
+  architecture: amd64
+  expiry: 8760h   # 1 year
+
+source:
+  downloader: debootstrap
+  url: http://archive.ubuntu.com/ubuntu
+  # Ubuntu 24.04 (Noble) archive signing key
+  keys:
+    - https://keyserver.ubuntu.com/pks/lookup?op=get&search=0xF6ECB3762474EDA9D21B702287192EF5BE0C61AE
+  suites:
+    - noble
+    - noble-updates
+    - noble-security
+  components:
+    - main
+    - universe
+    - restricted
+    - multiverse
+
+packages:
+  manager: apt
+  update: true
+  install:
+    # Base system / init
+    - systemd
+    - systemd-sysv
+    - dbus
+    - sudo
+    - openssh-server
+    - ca-certificates
+    - locales
+    # Remote desktop
+    - xrdp
+    - xorgxrdp
+    - xfce4
+    - xfce4-goodies
+    - xfce4-terminal
+    - fonts-noto-color-emoji
+  cleanup: true
+
+files:
+  - name: hostname
+    path: /etc/hostname
+    generator: hostname
+  - name: hosts
+    path: /etc/hosts
+    generator: hosts
+
+actions:
+  - trigger: post-packages
+    action: |
+      #!/bin/sh
+      set -eux
+
+      # Make XFCE4 the default session for XRDP (used by sesman).
+      echo "exec startxfce4" > /etc/skel/.xsession
+      printf '#!/bin/sh\nexec startxfce4\n' > /etc/xrdp/startwm.sh
+      chmod 755 /etc/xrdp/startwm.sh
+
+      # Create a default login user. CHANGE THE PASSWORD AFTER FIRST LOGIN.
+      if ! id ubuntu >/dev/null 2>&1; then
+        useradd -m -s /bin/bash -u 1000 ubuntu
+        echo "ubuntu:ubuntu" | chpasswd
+        usermod -aG sudo ubuntu
+        echo "ubuntu ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/ubuntu
+        chmod 440 /etc/sudoers.d/ubuntu
+      fi
+      cp /etc/skel/.xsession /home/ubuntu/.xsession
+      chown ubuntu:ubuntu /home/ubuntu/.xsession
+
+      # Enable XRDP at boot (offline systemd symlink; works in chroot).
+      ln -sf /lib/systemd/system/xrdp.service \
+        /etc/systemd/system/multi-user.target.wants/xrdp.service
+
+      # Allow SSH password authentication so the same account works over SSH.
+      sed -i 's/^#\?PasswordAuthentication .*/PasswordAuthentication yes/' \
+        /etc/ssh/sshd_config
+
+      # Locale
+      locale-gen en_US.UTF-8 2>/dev/null || true
+
+      # Trim apt caches for a smaller image.
+      apt-get clean
+      rm -rf /var/lib/apt/lists/*
+
+  - trigger: post-files
+    action: |
+      #!/bin/sh
+      set -eux
+      # Ensure the runtime dir xrdp expects exists.
+      mkdir -p /var/run/xrdp
+      chown xrdp:xrdp /var/run/xrdp 2>/dev/null || true
