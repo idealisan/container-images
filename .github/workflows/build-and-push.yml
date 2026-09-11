@@ -58,7 +58,8 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
-            debootstrap rsync gnupg squashfs-tools qemu-user-static
+            debootstrap rsync gnupg squashfs-tools qemu-user-static \
+            pkg-config libgpgme-dev libassuan-dev libbtrfs-dev libdevmapper-dev
           go install github.com/lxc/distrobuilder/v3/distrobuilder@latest
           echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
 
