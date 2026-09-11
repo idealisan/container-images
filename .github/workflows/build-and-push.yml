@@ -78,7 +78,7 @@ jobs:
           # debootstrap step produces the right arch rootfs (cross-arch builds
           # for arm64 run under qemu-user-static registered by the package).
           sed -i -E "s/^  architecture: .*/  architecture: ${{ matrix.arch }}/" image.yaml
-          distrobuilder build-incus image.yaml
+          sudo env "PATH=$PATH" distrobuilder build-incus image.yaml
 
       # --- Wrap the rootfs as an OCI image and push (single arch) ----------
       - name: Set up Docker Buildx
