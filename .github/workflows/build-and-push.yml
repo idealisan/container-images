@@ -53,14 +53,14 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: "1.22"
+          go-version: "1.26"
 
       - name: Install distrobuilder and build deps
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
             debootstrap rsync gnupg squashfs-tools qemu-user-static
-          go install github.com/lxc/distrobuilder/cmd/distrobuilder@latest
+          go install github.com/lxc/distrobuilder/v3/distrobuilder@latest
           echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
 
       - name: Build rootfs (${{ matrix.arch }})
@@ -70,7 +70,7 @@ jobs:
           # debootstrap step produces the right arch rootfs (cross-arch builds
           # for arm64 run under qemu-user-static registered by the package).
           sed -i -E "s/^  architecture: .*/  architecture: ${{ matrix.arch }}/" image.yaml
-          distrobuilder build-incus image.yaml --arch ${{ matrix.arch }}
+          distrobuilder build-incus image.yaml
 
       # --- Wrap the rootfs as an OCI image and push (single arch) ----------
       - name: Set up Docker Buildx
