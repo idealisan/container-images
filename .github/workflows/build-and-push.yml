@@ -1,11 +1,10 @@
 name: Build and push images
 
-# Triggers on every published release AND pre-release.
-# The GitHub `release` event with `types: [published]` fires for both
-# regular releases and pre-releases, so this single trigger covers both.
+# Triggers on every push to main. Each push publishes the images, so
+# there is no need to manually cut a release.
 on:
-  release:
-    types: [published]
+  push:
+    branches: [main]
 
 permissions:
   contents: read
@@ -130,12 +129,10 @@ jobs:
         with:
           images: ${{ env.IMAGE }}
           tags: |
-            # the release tag, e.g. v1.0.0
-            type=ref,event=tag
-            # latest only for stable (non-prerelease) releases
-            type=raw,value=latest,enable=${{ !github.event.release.prerelease }}
-            # prerelease tag for pre-releases
-            type=raw,value=prerelease,enable=${{ github.event.release.prerelease }}
+            # every push is a publish: mark as latest
+            type=raw,value=latest
+            # short commit sha for traceability
+            type=sha
 
       - name: Create multi-arch manifest
         env:
