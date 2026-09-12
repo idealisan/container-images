@@ -77,8 +77,34 @@ jobs:
           # Pin the architecture in the config to the matrix value so the
           # debootstrap step produces the right arch rootfs (cross-arch builds
           # for arm64 run under qemu-user-static registered by the package).
+          # source.url in image.yaml is templated on image.architecture, so
+          # setting architecture alone selects the correct mirror (ports for arm64).
           sed -i -E "s/^  architecture: .*/  architecture: ${{ matrix.arch }}/" image.yaml
+          cat image.yaml
           sudo env "PATH=$PATH" distrobuilder build-incus image.yaml
+          echo "=== distrobuilder output ==="
+          ls -lh
+          # Incus split image produces rootfs.squashfs + incus.tar.xz, but Docker needs rootfs.tar.xz.
+          if [ -f rootfs.squashfs ]; then
+            echo "Converting rootfs.squashfs to rootfs.tar.xz for Docker..."
+            mkdir -p /tmp/rootfs-extract
+            sudo unsquashfs -f -d /tmp/rootfs-extract rootfs.squashfs
+            # Create tar from extracted rootfs; preserve numeric ids and xattrs for fidelity.
+            sudo tar -C /tmp/rootfs-extract -cf /tmp/rootfs.tar .
+            xz -T0 -9 /tmp/rootfs.tar
+            sudo mv /tmp/rootfs.tar.xz ./rootfs.tar.xz
+            sudo rm -rf /tmp/rootfs-extract
+            # Ensure Docker (running as runner user) can read the file.
+            sudo chown "$(id -u):$(id -g)" rootfs.tar.xz || sudo chmod 644 rootfs.tar.xz
+            ls -lh rootfs.*
+          elif [ -f rootfs.tar.xz ]; then
+            echo "rootfs.tar.xz already exists"
+            ls -lh rootfs.*
+          else
+            echo "ERROR: Neither rootfs.squashfs nor rootfs.tar.xz found"
+            ls -lh
+            exit 1
+          fi
 
       # --- Wrap the rootfs as an OCI image and push (single arch) ----------
       - name: Set up Docker Buildx

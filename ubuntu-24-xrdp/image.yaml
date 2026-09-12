@@ -21,7 +21,8 @@ image:
 
 source:
   downloader: debootstrap
-  url: http://archive.ubuntu.com/ubuntu
+  # Use ports mirror for arm64 (archive.ubuntu.com has no arm64 packages).
+  url: "{% if image.architecture == \"arm64\" %}http://ports.ubuntu.com/ubuntu-ports{% else %}http://archive.ubuntu.com/ubuntu{% endif %}"
   keyserver: keyserver.ubuntu.com
   keys:
     - 0x790BC7277767219C42C86F933B4FE6ACC0B21F32
