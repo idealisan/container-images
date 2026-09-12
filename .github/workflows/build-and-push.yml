@@ -87,15 +87,12 @@ jobs:
           # Incus split image produces rootfs.squashfs + incus.tar.xz, but Docker needs rootfs.tar.xz.
           if [ -f rootfs.squashfs ]; then
             echo "Converting rootfs.squashfs to rootfs.tar.xz for Docker..."
+            sudo rm -rf /tmp/rootfs-extract
             mkdir -p /tmp/rootfs-extract
             sudo unsquashfs -f -d /tmp/rootfs-extract rootfs.squashfs
-            # Create tar from extracted rootfs; preserve numeric ids and xattrs for fidelity.
-            sudo tar -C /tmp/rootfs-extract -cf /tmp/rootfs.tar .
-            xz -T0 -9 /tmp/rootfs.tar
-            sudo mv /tmp/rootfs.tar.xz ./rootfs.tar.xz
+            # Create tar via pipe to avoid permission issues with /tmp intermediate file owned by root.
+            sudo tar -C /tmp/rootfs-extract -cf - . | xz -T0 -9 > rootfs.tar.xz
             sudo rm -rf /tmp/rootfs-extract
-            # Ensure Docker (running as runner user) can read the file.
-            sudo chown "$(id -u):$(id -g)" rootfs.tar.xz || sudo chmod 644 rootfs.tar.xz
             ls -lh rootfs.*
           elif [ -f rootfs.tar.xz ]; then
             echo "rootfs.tar.xz already exists"
