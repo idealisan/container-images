@@ -15,7 +15,9 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  # Discover every image directory (any dir that contains an image.yaml).
+  # Discover every image directory (any dir that contains an image.yaml
+  # for distrobuilder/LXC images, or a Dockerfile for plain Docker images
+  # such as wordpress-sqlite which is based on an upstream image).
   discover:
     runs-on: ubuntu-latest
     outputs:
@@ -24,8 +26,9 @@ jobs:
       - uses: actions/checkout@v4
       - id: dirs
         run: |
-          dirs=$(find . -name image.yaml -not -path './.git/*' \
-            | sed -E 's#/image.yaml$##; s#^\./##' \
+          dirs=$(find . \( -name image.yaml -o -name Dockerfile \) -not -path './.git/*' \
+            | sed -E 's#/(image.yaml|Dockerfile)$##; s#^\./##' \
+            | sort -u \
             | jq -R -s -c 'split("\n") | map(select(length > 0))')
           echo "images=$dirs" >> "$GITHUB_OUTPUT"
           echo "Discovered images: $dirs"
@@ -49,12 +52,16 @@ jobs:
         run: echo "IMAGE=ghcr.io/${GITHUB_REPOSITORY,,}/${{ matrix.image }}" >> "$GITHUB_ENV"
 
       # --- Build the LXC/Incus rootfs with distrobuilder -------------------
+      # Dockerfile-only images (e.g. wordpress-sqlite, based on an upstream
+      # image) have no image.yaml and skip this whole section.
       - name: Set up Go
+        if: hashFiles(format('{0}/image.yaml', matrix.image)) != ''
         uses: actions/setup-go@v5
         with:
           go-version: "1.26"
 
       - name: Install distrobuilder and build deps
+        if: hashFiles(format('{0}/image.yaml', matrix.image)) != ''
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
@@ -74,6 +81,11 @@ jobs:
       - name: Build rootfs (${{ matrix.arch }})
         run: |
           cd "${{ matrix.image }}"
+          if [ ! -f image.yaml ]; then
+            echo "No image.yaml — Dockerfile-only image, skipping distrobuilder rootfs build."
+            ls -lh
+            exit 0
+          fi
           # Pin the architecture in the config to the matrix value so the
           # debootstrap step produces the right arch rootfs (cross-arch builds
           # for arm64 run under qemu-user-static registered by the package).
@@ -115,7 +127,11 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Make entrypoint executable
-        run: chmod +x "${{ matrix.image }}/entrypoint.sh"
+        run: |
+          # Image dirs name their entrypoint differently
+          # (entrypoint.sh vs sqlite-entrypoint.sh); tolerate either.
+          chmod +x "${{ matrix.image }}/"*.sh 2>/dev/null || true
+          ls -l "${{ matrix.image }}/"
 
       - name: Build and push (${{ matrix.arch }})
         uses: docker/build-push-action@v6
