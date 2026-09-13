@@ -35,25 +35,36 @@ All upstream `WORDPRESS_*` variables keep working
 (`WORDPRESS_TABLE_PREFIX`, `WORDPRESS_DEBUG`, `WORDPRESS_CONFIG_EXTRA`, …).
 Database host/user/password variables are simply irrelevant.
 
-Optional overrides via `WORDPRESS_CONFIG_EXTRA`:
+On first start (when no `wp-config.php` exists yet) the entrypoint
+auto-generates a SQLite-aware config from the official
+`wp-config-docker.php` template, so you skip core's MySQL credential form
+and go straight to the ordinary WordPress install wizard (site title +
+admin account). The SQLite database file is created in
+`wp-content/database/` automatically.
+
+Custom SQLite location (defaults shown):
 
 ```sh
-# Custom SQLite location (defaults shown)
--e WORDPRESS_CONFIG_EXTRA="define('DB_DIR','/var/www/html/wp-content/database'); define('DB_FILE','.ht.sqlite');"
+# via dedicated variables (no WORDPRESS_CONFIG_EXTRA needed)
+-e WORDPRESS_DB_DIR="'/app/sqlite/'" \
+-e WORDPRESS_DB_FILE=".ht.sqlite"
 ```
+
+> Note: `WORDPRESS_DB_DIR` is a PHP expression (it ends up inside
+> `define( 'DB_DIR', … )`), so the default is `__DIR__ . '/wp-content/database/'`.
 
 ## How it works
 
 - `Dockerfile` (`ARG WORDPRESS_IMAGE`, default `wordpress:7.1-php8.3-apache`):
-  installs the `pdo_sqlite`/`sqlite3` PHP extensions and downloads the
-  official plugin zip from `downloads.wordpress.org` into
-  `/usr/src/wordpress/wp-content/plugins/`.
+  `pdo_sqlite`/`sqlite3` are already compiled into the official base image —
+  only verified here — and the official plugin zip is downloaded from
+  `downloads.wordpress.org` into `/usr/src/wordpress/wp-content/plugins/`.
 - `sqlite-entrypoint.sh`: on every start ensures the plugin exists in the
   live docroot (so volumes first created by plain WordPress upgrade cleanly),
   renders `wp-content/db.php` from the plugin's `db.copy` template with the
   same replacement the plugin activator uses, ensures
-  `wp-content/database/` is writable, then execs the untouched upstream
-  `docker-entrypoint.sh`.
+  `wp-content/database/` is writable, generates `wp-config.php` if missing,
+  then execs the untouched upstream `docker-entrypoint.sh`.
 
 ## Versions
 

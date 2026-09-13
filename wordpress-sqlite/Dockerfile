@@ -22,23 +22,24 @@ FROM ${WORDPRESS_IMAGE}
 
 ARG SQLITE_PLUGIN_VERSION=3.0.2
 
-# pdo_sqlite is what the official SQLite plugin requires. The php base
-# usually ships the sqlite libraries already; docker-php-ext-install is
-# idempotent so this is safe either way. The sqlite3 CLI is only a tiny
-# extra for debugging / manual backups via `sqlite3` in the container.
+# pdo_sqlite and sqlite3 are already compiled into the official php base
+# image (built with --with-pdo-sqlite=/usr --with-sqlite3=/usr), which the
+# official SQLite plugin requires — just verify them here. The sqlite3 CLI
+# is a small extra for debugging / manual backups in the container.
 RUN set -eux; \
 	apt-get update; \
 	apt-get install -y --no-install-recommends sqlite3; \
 	rm -rf /var/lib/apt/lists/*; \
-	docker-php-ext-install -j "$(nproc)" pdo_sqlite sqlite3; \
 	php -m | grep -Ei 'pdo_sqlite|sqlite3'; \
-	php -r '$v = SQLite3::version(); echo "SQLite library: " . $v["versionString"] . PHP_EOL;'
+	php -r '$v = SQLite3::version(); if (version_compare($v["versionString"], "3.37.0", "<")) { fwrite(STDERR, "SQLite too old: " . $v["versionString"] . "\n"); exit(1); } echo "SQLite library: " . $v["versionString"] . PHP_EOL;'
 
 # Bake the official SQLite Database Integration plugin into the seed tree
 # (/usr/src/wordpress) so the upstream docker-entrypoint.sh copies it into
 # /var/www/html on first start, exactly like any other bundled wp-content.
 # Source: https://wordpress.org/plugins/sqlite-database-integration/
 RUN set -eux; \
+	apt-get update; \
+	apt-get install -y --no-install-recommends unzip; \
 	cd /tmp; \
 	curl -fL -o sqlite-database-integration.zip \
 		"https://downloads.wordpress.org/plugin/sqlite-database-integration.${SQLITE_PLUGIN_VERSION}.zip"; \
@@ -51,7 +52,9 @@ RUN set -eux; \
 	chown -R www-data:www-data /usr/src/wordpress/wp-content/plugins/sqlite-database-integration; \
 	mkdir -p /usr/src/wordpress/wp-content/database; \
 	chown www-data:www-data /usr/src/wordpress/wp-content/database; \
-	chmod 775 /usr/src/wordpress/wp-content/database
+	chmod 775 /usr/src/wordpress/wp-content/database; \
+	apt-get purge -y --auto-remove unzip; \
+	rm -rf /var/lib/apt/lists/*
 
 # Wrapper entrypoint: ensures the plugin + db.php drop-in exist in the live
 # docroot (covers persisted volumes created from plain WordPress too), then
