@@ -1,0 +1,48 @@
+# Docker Compose reference for wordpress-sqlite.
+#
+# Usage:
+#   docker compose up -d
+#   # open http://localhost:8080 and finish the WordPress installer
+#
+# Single container, no MySQL service needed: WordPress stores everything in
+# a local SQLite database under /var/www/html/wp-content/database/.
+#
+# The version key is intentionally omitted (compose is a file-format spec
+# now; modern Docker Compose warns when "version" is set).
+
+services:
+  wordpress:
+    image: ghcr.io/idealisan/container-images/wordpress-sqlite:latest
+    container_name: wordpress-sqlite
+    restart: unless-stopped
+    ports:
+      - "8080:80"
+    volumes:
+      # Persist the whole WordPress install (site, uploads, SQLite db).
+      - wp_data:/var/www/html
+    environment:
+      # All upstream WORDPRESS_* variables work (all optional here):
+      - WORDPRESS_TABLE_PREFIX=wp_
+      - WORDPRESS_DEBUG=0
+      # Custom SQLite location (optional, defaults shown):
+      # - WORDPRESS_DB_DIR="__DIR__ . '/wp-content/database/'"
+      # - WORDPRESS_DB_FILE=.ht.sqlite
+      # Override the auto-generated secret keys/salts (optional but
+      # recommended for stable installs):
+      - WORDPRESS_AUTH_KEY=change-me
+      - WORDPRESS_SECURE_AUTH_KEY=change-me
+      - WORDPRESS_LOGGED_IN_KEY=change-me
+      - WORDPRESS_NONCE_KEY=change-me
+      - WORDPRESS_AUTH_SALT=change-me
+      - WORDPRESS_SECURE_AUTH_SALT=change-me
+      - WORDPRESS_LOGGED_IN_SALT=change-me
+      - WORDPRESS_NONCE_SALT=change-me
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1/ -o /dev/null || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+volumes:
+  wp_data:

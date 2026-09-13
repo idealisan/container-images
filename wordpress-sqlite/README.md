@@ -19,6 +19,12 @@ docker run -d --name wp -p 8080:80 -v wp-sqlite:/var/www/html \
 Then open `http://localhost:8080` and finish the WordPress installer.
 You can skip all `WORDPRESS_DB_*` variables — there is no database server.
 
+Or with Docker Compose (reference file in this directory):
+
+```sh
+docker compose up -d   # uses compose.yaml: port 8080, named volume wp_data
+```
+
 ## Data
 
 | Path | Purpose |
