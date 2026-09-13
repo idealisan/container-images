@@ -1,0 +1,39 @@
+# Registry reverse-proxy config for the /docker and /ghcr path markers:
+#
+#   /docker/...  -> ${PROXY_DOCKER_UPSTREAM} (default registry-1.docker.io)
+#   /ghcr/...    -> ${PROXY_GHCR_UPSTREAM}   (default ghcr.io)
+#
+# The marker only selects the upstream; it is stripped before forwarding and
+# the remainder of the path reaches the registry unchanged. Caddy handles
+# TLS for {$PROXY_DOMAIN} automatically (Let's Encrypt on first request).
+#
+# Accepted path forms (markers are lowercase):
+#   docker pull <domain>/docker/<repo>:<tag>       -> upstream /v2/<repo>...
+#   docker pull <domain>/ghcr/<user>/<repo>:<tag>  -> upstream /v2/<user>/<repo>...
+#   curl https://<domain>/docker/v2/<repo>/tags/list
+#   curl https://<domain>/docker/<repo>/tags/list  (shorthand, /v2/ implied)
+{$PROXY_DOMAIN} {
+	# Docker Hub — matches both the Docker client wire form
+	# (/v2/docker/<rest>) and the /v2-less shorthand (/docker/<rest>).
+	# The rewrite drops the /docker marker and restores the /v2 registry API
+	# prefix, so upstream always receives /v2/<rest>.
+	@docker path /docker/* /v2/docker/*
+	handle @docker {
+		uri path_regexp ^(?:/v2)?/docker(/.*)$ /v2$1
+		reverse_proxy https://{$PROXY_DOCKER_UPSTREAM:registry-1.docker.io} {
+			header_up Host {$PROXY_DOCKER_UPSTREAM:registry-1.docker.io}
+		}
+	}
+
+	# GHCR — same two forms, marker /ghcr, upstream ghcr.io.
+	@ghcr path /ghcr/* /v2/ghcr/*
+	handle @ghcr {
+		uri path_regexp ^(?:/v2)?/ghcr(/.*)$ /v2$1
+		reverse_proxy https://{$PROXY_GHCR_UPSTREAM:ghcr.io} {
+			header_up Host {$PROXY_GHCR_UPSTREAM:ghcr.io}
+		}
+	}
+
+	# Not a proxied registry request.
+	respond "Not Found" 404
+}

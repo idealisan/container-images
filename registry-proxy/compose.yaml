@@ -1,0 +1,35 @@
+# Docker Compose reference for registry-proxy.
+#
+# Usage:
+#   1) point an A/AAAA record for PROXY_DOMAIN at this host
+#   2) docker compose up -d
+#   3) pull through it:
+#        docker pull <PROXY_DOMAIN>/docker/library/nginx:latest
+#        docker pull <PROXY_DOMAIN>/ghcr/<user>/<repo>:latest
+#
+# Caddy terminates TLS automatically (Let's Encrypt). Keep port 80 mapped —
+# it is used for ACME HTTP-01 validation. The version key is intentionally
+# omitted (compose is a file-format spec now).
+
+services:
+  registry-proxy:
+    image: ghcr.io/idealisan/container-images/registry-proxy:latest
+    container_name: registry-proxy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      # REQUIRED: the public domain all pulls run through.
+      - PROXY_DOMAIN=registry.example.com
+      # Optional upstream overrides (defaults apply if unset):
+      # - PROXY_DOCKER_UPSTREAM=registry-1.docker.io
+      # - PROXY_GHCR_UPSTREAM=ghcr.io
+    volumes:
+      # Certificates / ACME state must persist across restarts.
+      - proxy_data:/data
+      - proxy_config:/config
+
+volumes:
+  proxy_data:
+  proxy_config:

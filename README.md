@@ -79,6 +79,14 @@ docker run -d -p 8080:80 -v wp-sqlite:/var/www/html \
   ghcr.io/idealisan/container-images/wordpress-sqlite:latest
 ```
 
+```sh
+docker pull ghcr.io/idealisan/container-images/registry-proxy:latest
+docker run -d -p 80:80 -p 443:443 -v registry-proxy-data:/data \
+  -e PROXY_DOMAIN=registry.example.com \
+  ghcr.io/idealisan/container-images/registry-proxy:latest
+# then: docker pull registry.example.com/docker/library/nginx:latest
+```
+
 Or launch distrobuilder images directly with Incus
 (OCI support runs the distro init instead):
 
@@ -92,3 +100,4 @@ incus launch ghcr.io/idealisan/container-images/ubuntu-24-xrdp:latest mycontaine
 |-------|-------------|
 | [`ubuntu-24-xrdp`](ubuntu-24-xrdp) | Ubuntu 24.04 (Noble) + XRDP + XFCE desktop, for RDP access |
 | [`wordpress-sqlite`](wordpress-sqlite) | Official WordPress + official SQLite Database Integration plugin, no MySQL needed |
+| [`registry-proxy`](registry-proxy) | Caddy reverse proxy exposing Docker Hub `/docker/...` and GHCR `/ghcr/...` under one HTTPS domain (Let's Encrypt) |
