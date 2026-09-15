@@ -10,16 +10,18 @@
 #      volumes first created by plain WordPress also get upgraded cleanly),
 #   2. generate wp-content/db.php from the plugin's db.copy template with the
 #      same placeholder replacement the plugin's own activator uses,
-#   3. make sure wp-content/database/ exists and is writable by www-data,
+#   3. make sure /var/www/sqlite exists (outside the docroot) and is writable
+#      by www-data, migrating an old wp-content/database/ install if needed,
 #   4. generate wp-config.php from the official wp-config-docker.php template
 #      (core's config wizard always needs a real MySQL server, so we skip it
 #      and let the user go straight to the install wizard instead),
 #   5. exec the untouched upstream /usr/local/bin/docker-entrypoint.sh.
 #
-# The SQLite file itself defaults to wp-content/database/.ht.sqlite and is
+# The SQLite file itself defaults to /var/www/sqlite/.ht.sqlite — outside the
+# web-accessible docroot so it can never be downloaded over HTTP — and is
 # created by the plugin on first request. Persist it with a volume on
-# /var/www/html. Override the location from wp-config.php if needed:
-#   -e WORDPRESS_CONFIG_EXTRA="define('DB_DIR','/var/www/html/wp-content/database'); define('DB_FILE','.ht.sqlite');"
+# /var/www/sqlite. Override the location from wp-config.php if needed:
+#   -e WORDPRESS_DB_DIR="'/somewhere/writable/'" define('DB_FILE','.ht.sqlite');
 set -Eeuo pipefail
 
 DOCROOT="/var/www/html"
@@ -74,10 +76,32 @@ else
 	echo >&2 "sqlite-entrypoint: WARNING: ${PLUGIN_DIR}/db.copy not found, skipping drop-in setup."
 fi
 
-# 3. Ensure the database directory exists and is writable.
-mkdir -p wp-content/database
-chown www-data:www-data wp-content/database 2>/dev/null || true
-chmod 775 wp-content/database 2>/dev/null || true
+# 3. Database directory: keep the SQLite file OUTSIDE the web-accessible
+#    docroot (/var/www/html) so it can never be downloaded over HTTP, even if
+#    a future Apache config change made ".ht*" files servable.
+DB_DIR="/var/www/sqlite"
+OLD_DB_DIR="$DOCROOT/wp-content/database"
+
+# 3a. One-time migration for volumes created by older image versions, which
+#     kept the database inside wp-content/database/: move the db file (with
+#     its -wal/-shm sidecars) to the new location and repoint wp-config.php.
+if [ -d "$OLD_DB_DIR" ]; then
+	if [ ! -e "$DB_DIR/.ht.sqlite" ] && ls "$OLD_DB_DIR"/.ht.sqlite* >/dev/null 2>&1; then
+		echo >&2 "sqlite-entrypoint: migrating SQLite database from $OLD_DB_DIR to $DB_DIR ..."
+		mkdir -p "$DB_DIR"
+		mv "$OLD_DB_DIR"/.ht.sqlite* "$DB_DIR"/
+		chown -R www-data:www-data "$DB_DIR" 2>/dev/null || true
+	fi
+fi
+if [ -s wp-config.php ] && grep -q "wp-content/database" wp-config.php; then
+	echo >&2 "sqlite-entrypoint: repointing wp-config.php DB_DIR to $DB_DIR ..."
+	sed -i "/define( 'DB_DIR',/{/wp-content\/database/s#.*#define( 'DB_DIR', '$DB_DIR/' );#}" wp-config.php
+	chown www-data:www-data wp-config.php 2>/dev/null || true
+fi
+
+mkdir -p "$DB_DIR"
+chown www-data:www-data "$DB_DIR" 2>/dev/null || true
+chmod 750 "$DB_DIR" 2>/dev/null || true
 
 # 4. Ensure a wp-config.php exists. Core WordPress' config wizard always
 # connects to a real MySQL server (it re-builds $wpdb without any db.php
@@ -103,7 +127,7 @@ if [ ! -s wp-config.php ]; then
 		exit 1
 	fi
 
-	db_dir="${WORDPRESS_DB_DIR:-__DIR__ . '/wp-content/database/'}"
+	db_dir="${WORDPRESS_DB_DIR:-'/var/www/sqlite/'}"
 	db_file="${WORDPRESS_DB_FILE:-.ht.sqlite}"
 
 	{

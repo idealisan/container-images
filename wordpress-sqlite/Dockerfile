@@ -5,7 +5,9 @@
 # "SQLite Database Integration" plugin (WordPress Team, distributed on
 # wordpress.org, no third-party feature plugins) is baked in and wired up
 # as the wp-content/db.php drop-in. The site database lives in a local
-# SQLite file under wp-content/database/ instead of a MySQL server.
+# SQLite file under /var/www/sqlite — outside the web-accessible docroot,
+# so the database can never be downloaded over HTTP — instead of a MySQL
+# server. Upload limits are raised to 50 MB per file.
 #
 # Build args:
 #   WORDPRESS_IMAGE        base official image (default pins WP 7.1 + PHP 8.3)
@@ -14,6 +16,7 @@
 # Run:
 #   docker run -d -p 8080:80 \
 #     -v wp-sqlite:/var/www/html \
+#     -v wp-sqlite-db:/var/www/sqlite \
 #     ghcr.io/idealisan/container-images/wordpress-sqlite:latest
 # Then open http://localhost:8080 and finish the WordPress installer.
 # No WORDPRESS_DB_* variables and no separate database container needed.
@@ -50,11 +53,31 @@ RUN set -eux; \
 	test -f /usr/src/wordpress/wp-content/plugins/sqlite-database-integration/load.php; \
 	test -f /usr/src/wordpress/wp-content/plugins/sqlite-database-integration/db.copy; \
 	chown -R www-data:www-data /usr/src/wordpress/wp-content/plugins/sqlite-database-integration; \
-	mkdir -p /usr/src/wordpress/wp-content/database; \
-	chown www-data:www-data /usr/src/wordpress/wp-content/database; \
-	chmod 775 /usr/src/wordpress/wp-content/database; \
 	apt-get purge -y --auto-remove unzip; \
 	rm -rf /var/lib/apt/lists/*
+
+# Pre-create the SQLite directory OUTSIDE the docroot (/var/www/html), so the
+# database file is never reachable over HTTP. The entrypoint re-ensures this
+# at runtime (named volumes mount over it, so permissions are re-applied).
+RUN set -eux; \
+	mkdir -p /var/www/sqlite; \
+	chown www-data:www-data /var/www/sqlite; \
+	chmod 750 /var/www/sqlite
+
+# Raise upload limits (the official image only allows 2 MB uploads) and make
+# Apache accept bodies of the same size. post_max_size must be >=
+# upload_max_filesize, and LimitRequestBody >= post_max_size.
+RUN set -eux; \
+	{ \
+		echo "upload_max_filesize = 50M"; \
+		echo "post_max_size = 64M"; \
+		echo "memory_limit = 256M"; \
+		echo "max_execution_time = 120"; \
+	} > /usr/local/etc/php/conf.d/wordpress-uploads.ini; \
+	{ \
+		echo "LimitRequestBody 67108864"; \
+	} > /etc/apache2/conf-available/wordpress-limits.conf; \
+	a2enconf wordpress-limits
 
 # Wrapper entrypoint: ensures the plugin + db.php drop-in exist in the live
 # docroot (covers persisted volumes created from plain WordPress too), then

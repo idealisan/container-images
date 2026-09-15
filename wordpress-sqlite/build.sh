@@ -21,4 +21,4 @@ docker build \
 
 echo
 echo "Built $IMAGE_NAME:$TAG"
-echo "Run: docker run -d -p 8080:80 -v wp-sqlite:/var/www/html $IMAGE_NAME:$TAG"
+echo "Run: docker run -d -p 8080:80 -v wp-sqlite:/var/www/html -v wp-sqlite-db:/var/www/sqlite $IMAGE_NAME:$TAG"

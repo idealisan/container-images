@@ -5,7 +5,8 @@
 #   # open http://localhost:8080 and finish the WordPress installer
 #
 # Single container, no MySQL service needed: WordPress stores everything in
-# a local SQLite database under /var/www/html/wp-content/database/.
+# a local SQLite database under /var/www/sqlite/ — outside the web-accessible
+# docroot, so the database file can never be downloaded over HTTP.
 #
 # The version key is intentionally omitted (compose is a file-format spec
 # now; modern Docker Compose warns when "version" is set).
@@ -18,14 +19,16 @@ services:
     ports:
       - "8080:80"
     volumes:
-      # Persist the whole WordPress install (site, uploads, SQLite db).
+      # Persist the WordPress install (site files, uploads, plugins).
       - wp_data:/var/www/html
+      # Persist the SQLite database separately, outside the docroot.
+      - sqlite_data:/var/www/sqlite
     environment:
       # All upstream WORDPRESS_* variables work (all optional here):
       - WORDPRESS_TABLE_PREFIX=wp_
       - WORDPRESS_DEBUG=0
-      # Custom SQLite location (optional, defaults shown):
-      # - WORDPRESS_DB_DIR="__DIR__ . '/wp-content/database/'"
+      # Custom SQLite location (optional; the defaults are shown):
+      # - WORDPRESS_DB_DIR="'/var/www/sqlite/'"
       # - WORDPRESS_DB_FILE=.ht.sqlite
       # Override the auto-generated secret keys/salts (optional but
       # recommended for stable installs):
@@ -46,3 +49,4 @@ services:
 
 volumes:
   wp_data:
+  sqlite_data:
