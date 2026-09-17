@@ -100,4 +100,5 @@ incus launch ghcr.io/idealisan/container-images/ubuntu-24-xrdp:latest mycontaine
 |-------|-------------|
 | [`ubuntu-24-xrdp`](ubuntu-24-xrdp) | Ubuntu 24.04 (Noble) + XRDP + XFCE desktop, for RDP access |
 | [`wordpress-sqlite`](wordpress-sqlite) | Official WordPress + official SQLite Database Integration plugin, no MySQL needed |
+| [`multisite-wp-sqlite`](multisite-wp-sqlite) | Same as `wordpress-sqlite`, but always a WordPress multisite network (headless install or wizard + one restart) |
 | [`registry-proxy`](registry-proxy) | Caddy reverse proxy exposing Docker Hub `/docker/...` and GHCR `/ghcr/...` under one HTTPS domain (Let's Encrypt) |

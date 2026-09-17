@@ -1,0 +1,78 @@
+# Docker Compose reference for multisite-wp-sqlite.
+#
+# Usage:
+#   docker compose up -d
+#
+# Single container, no MySQL service needed: WordPress runs as a MULTISITE
+# network on a local SQLite database under /var/www/sqlite/ — outside the
+# web-accessible docroot, so the database file can never be downloaded over
+# HTTP.
+#
+# Two install paths:
+#   1. Headless (recommended): fill in WORDPRESS_ADMIN_* below before the
+#      first start — site + network are created automatically, no wizard,
+#      no restart.
+#   2. Wizard: leave the credentials commented out, open
+#      http://localhost:8080, finish the ordinary WordPress installer, then
+#      `docker compose restart` once — the network is created on that start.
+#
+# The version key is intentionally omitted (compose is a file-format spec
+# now; modern Docker Compose warns when "version" is set).
+
+services:
+  wordpress:
+    image: ghcr.io/idealisan/container-images/multisite-wp-sqlite:latest
+    container_name: multisite-wp-sqlite
+    restart: unless-stopped
+    ports:
+      - "8080:80"
+    volumes:
+      # Persist the WordPress install (site files, uploads, plugins).
+      - wp_data:/var/www/html
+      # Persist the SQLite database separately, outside the docroot.
+      - sqlite_data:/var/www/sqlite
+    environment:
+      # --- headless install (optional; commented out = use the wizard) -----
+      # Site URL. With a non-standard port it MUST match how you browse to
+      # the site (core only strips :80/:443 when matching network domains):
+      # - WORDPRESS_URL=http://localhost:8080
+      # - WORDPRESS_ADMIN_USER=admin
+      # - WORDPRESS_ADMIN_PASSWORD=change-me
+      # - WORDPRESS_ADMIN_EMAIL=admin@example.com
+      # - WORDPRESS_SITE_TITLE=My WordPress Network
+      # --- network mode -----------------------------------------------------
+      # false (default) = subdirectory mode (site.com/site2, no DNS needs).
+      # true            = subdomain mode (site2.site.com — needs wildcard
+      #                   DNS *.site.com pointing at this host).
+      # - WORDPRESS_SUBDOMAIN_INSTALL=false
+      # --- upstream WORDPRESS_* variables (all optional) --------------------
+      # - WORDPRESS_TABLE_PREFIX=wp_
+      # NOTE: the upstream wp-config template does !!getenv_docker('WORDPRESS_DEBUG'),
+      # so ANY non-empty value — including "0" — turns WP_DEBUG on. Leave it
+      # unset (or empty) for production:
+      # - WORDPRESS_DEBUG=1
+      # Custom SQLite location (optional; the defaults are shown):
+      # - WORDPRESS_DB_DIR=/var/www/sqlite/
+      # - WORDPRESS_DB_FILE=.ht.sqlite
+      # Override the auto-generated secret keys/salts (optional but
+      # recommended for stable installs):
+      - WORDPRESS_AUTH_KEY=change-me
+      - WORDPRESS_SECURE_AUTH_KEY=change-me
+      - WORDPRESS_LOGGED_IN_KEY=change-me
+      - WORDPRESS_NONCE_KEY=change-me
+      - WORDPRESS_AUTH_SALT=change-me
+      - WORDPRESS_SECURE_AUTH_SALT=change-me
+      - WORDPRESS_LOGGED_IN_SALT=change-me
+      - WORDPRESS_NONCE_SALT=change-me
+    healthcheck:
+      # The official wordpress image does not ship the `curl` CLI, so probe
+      # with PHP (always present) instead:
+      test: ["CMD-SHELL", "php -r 'exit(@file_get_contents(\"http://127.0.0.1/\") === false ? 1 : 0);'"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+volumes:
+  wp_data:
+  sqlite_data:
