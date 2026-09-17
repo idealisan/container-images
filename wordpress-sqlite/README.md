@@ -62,12 +62,13 @@ Custom SQLite location (defaults shown):
 
 ```sh
 # via dedicated variables (no WORDPRESS_CONFIG_EXTRA needed)
--e WORDPRESS_DB_DIR="'/app/sqlite/'" \
--e WORDPRESS_DB_FILE=".ht.sqlite"
+-e WORDPRESS_DB_DIR=/app/sqlite/ \
+-e WORDPRESS_DB_FILE=.ht.sqlite
 ```
 
-> Note: `WORDPRESS_DB_DIR` is a PHP expression (it ends up inside
-> `define( 'DB_DIR', … )`), so the default is `'/var/www/sqlite/'`.
+> Note: both values are written into `wp-config.php` with quoting applied
+> automatically (`define( 'DB_DIR', '…' )`). The older quoted style
+> (`-e WORDPRESS_DB_DIR="'/app/sqlite/'"`) is still tolerated.
 
 ## Upgrading from older versions
 

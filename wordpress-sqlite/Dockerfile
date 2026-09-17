@@ -29,30 +29,33 @@ ARG SQLITE_PLUGIN_VERSION=3.0.2
 # image (built with --with-pdo-sqlite=/usr --with-sqlite3=/usr), which the
 # official SQLite plugin requires — just verify them here. The sqlite3 CLI
 # is a small extra for debugging / manual backups in the container.
-RUN set -eux; \
-	apt-get update; \
-	apt-get install -y --no-install-recommends sqlite3; \
-	rm -rf /var/lib/apt/lists/*; \
-	php -m | grep -Ei 'pdo_sqlite|sqlite3'; \
-	php -r '$v = SQLite3::version(); if (version_compare($v["versionString"], "3.37.0", "<")) { fwrite(STDERR, "SQLite too old: " . $v["versionString"] . "\n"); exit(1); } echo "SQLite library: " . $v["versionString"] . PHP_EOL;'
-
+#
 # Bake the official SQLite Database Integration plugin into the seed tree
 # (/usr/src/wordpress) so the upstream docker-entrypoint.sh copies it into
 # /var/www/html on first start, exactly like any other bundled wp-content.
 # Source: https://wordpress.org/plugins/sqlite-database-integration/
+#
+# The db.copy placeholder greps guard against the entrypoint's sed renderer
+# silently breaking when a future plugin release renames its placeholders.
 RUN set -eux; \
 	apt-get update; \
-	apt-get install -y --no-install-recommends unzip; \
+	apt-get install -y --no-install-recommends sqlite3 unzip; \
+	rm -rf /var/lib/apt/lists/*; \
+	php -m | grep -Ei 'pdo_sqlite|sqlite3'; \
+	php -r '$v = SQLite3::version(); if (version_compare($v["versionString"], "3.37.0", "<")) { fwrite(STDERR, "SQLite too old: " . $v["versionString"] . "\n"); exit(1); } echo "SQLite library: " . $v["versionString"] . PHP_EOL;'; \
 	cd /tmp; \
 	curl -fL -o sqlite-database-integration.zip \
 		"https://downloads.wordpress.org/plugin/sqlite-database-integration.${SQLITE_PLUGIN_VERSION}.zip"; \
+	plugin_dir=/usr/src/wordpress/wp-content/plugins/sqlite-database-integration; \
 	mkdir -p /usr/src/wordpress/wp-content/plugins; \
-	rm -rf /usr/src/wordpress/wp-content/plugins/sqlite-database-integration; \
+	rm -rf "$plugin_dir"; \
 	unzip -q sqlite-database-integration.zip -d /usr/src/wordpress/wp-content/plugins; \
 	rm sqlite-database-integration.zip; \
-	test -f /usr/src/wordpress/wp-content/plugins/sqlite-database-integration/load.php; \
-	test -f /usr/src/wordpress/wp-content/plugins/sqlite-database-integration/db.copy; \
-	chown -R www-data:www-data /usr/src/wordpress/wp-content/plugins/sqlite-database-integration; \
+	test -f "$plugin_dir/load.php"; \
+	test -f "$plugin_dir/db.copy"; \
+	grep -Fq '{SQLITE_IMPLEMENTATION_FOLDER_PATH}' "$plugin_dir/db.copy"; \
+	grep -Fq '{SQLITE_PLUGIN}' "$plugin_dir/db.copy"; \
+	chown -R www-data:www-data "$plugin_dir"; \
 	apt-get purge -y --auto-remove unzip; \
 	rm -rf /var/lib/apt/lists/*
 

@@ -26,9 +26,12 @@ services:
     environment:
       # All upstream WORDPRESS_* variables work (all optional here):
       - WORDPRESS_TABLE_PREFIX=wp_
-      - WORDPRESS_DEBUG=0
+      # NOTE: the upstream wp-config template does !!getenv_docker('WORDPRESS_DEBUG'),
+      # so ANY non-empty value — including "0" — turns WP_DEBUG on. Leave it
+      # unset (or empty) for production; set "1" to enable debugging:
+      # - WORDPRESS_DEBUG=1
       # Custom SQLite location (optional; the defaults are shown):
-      # - WORDPRESS_DB_DIR="'/var/www/sqlite/'"
+      # - WORDPRESS_DB_DIR=/var/www/sqlite/
       # - WORDPRESS_DB_FILE=.ht.sqlite
       # Override the auto-generated secret keys/salts (optional but
       # recommended for stable installs):
@@ -41,7 +44,9 @@ services:
       - WORDPRESS_LOGGED_IN_SALT=change-me
       - WORDPRESS_NONCE_SALT=change-me
     healthcheck:
-      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1/ -o /dev/null || exit 1"]
+      # The official wordpress image does not ship the `curl` CLI, so probe
+      # with PHP (always present) instead:
+      test: ["CMD-SHELL", "php -r 'exit(@file_get_contents(\"http://127.0.0.1/\") === false ? 1 : 0);'"]
       interval: 30s
       timeout: 5s
       retries: 5
